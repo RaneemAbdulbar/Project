@@ -26,18 +26,7 @@ def setup_gui():
     log_area.pack()
 
     return root, log_area
-
-# Packet Capture and Logging
-def packet_callback(packet):
-    log_area.insert(tk.END, str(packet) + '\n')
-    log_area.see(tk.END)  
-
-def start_sniffing():
-    sniff(prn=packet_callback, stop_filter=lambda x: not running, store=0)
-
-def stop_sniffing():
-    global running
-    running = False
+    
 
 # Visualization with Matplotlib
 def plot_data():
