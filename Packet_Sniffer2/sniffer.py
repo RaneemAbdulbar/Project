@@ -9,10 +9,12 @@ import pyshark
 import queue
 import logging
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import socket
 
-# Global variable to control the sniffing threads
+# Global variables to control the sniffing threads and stopping events
 running = False
+scapy_stop_event = threading.Event()
+pyshark_stop_event = threading.Event()
 
 # Queue to handle logging from threads
 log_queue = queue.Queue()
@@ -78,14 +80,13 @@ def analyze_packets(packet):
         # Handle packets with missing layers
         pass
 
-# Function to run pyshark capture with a timeout
-def pyshark_capture(interface, timeout, filter_string):
+# Function to run pyshark capture
+def pyshark_capture(interface, filter_string):
     global running
     capture = pyshark.LiveCapture(interface=interface, bpf_filter=filter_string)
     try:
-        capture.sniff(timeout=timeout)
         for packet in capture.sniff_continuously():
-            if not running:
+            if pyshark_stop_event.is_set():
                 break
             analyze_packets(packet)
     except Exception as e:
@@ -93,7 +94,7 @@ def pyshark_capture(interface, timeout, filter_string):
 
 # Function to start scapy sniffing
 def start_scapy_sniffing(interface, filter_string):
-    sniff(prn=packet_handler, iface=interface, filter=filter_string, stop_filter=lambda x: not running)
+    sniff(prn=packet_handler, iface=interface, filter=filter_string, stop_filter=lambda x: scapy_stop_event.is_set())
 
 # Function to start both scapy and pyshark captures
 def start_sniffing():
@@ -111,8 +112,11 @@ def start_sniffing():
 
     filter_string = filter_entry.get()
     
+    scapy_stop_event.clear()
+    pyshark_stop_event.clear()
+
     scapy_thread = threading.Thread(target=start_scapy_sniffing, args=(interface, filter_string))
-    pyshark_thread = threading.Thread(target=pyshark_capture, args=(interface, 10, filter_string))
+    pyshark_thread = threading.Thread(target=pyshark_capture, args=(interface, filter_string))
 
     scapy_thread.start()
     pyshark_thread.start()
@@ -130,6 +134,8 @@ def stop_sniffing():
         return
 
     running = False
+    scapy_stop_event.set()
+    pyshark_stop_event.set()
     for thread in sniffing_threads:
         if thread.is_alive():
             thread.join()
@@ -186,38 +192,71 @@ def plot_traffic_distribution():
     plt.title("Traffic Distribution")
     plt.show()
 
+# Function to get the local IP address
+def get_local_ip():
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        ip_label.config(text=f"Your IP Address: {ip}")
+    except Exception as e:
+        ip_label.config(text=f"Error getting IP Address: {e}")
+
+# Function to clear the text area
+def clear_log():
+    text_area.configure(state='normal')
+    text_area.delete(1.0, tk.END)
+    text_area.configure(state='disabled')
+
 # Create the GUI
 app = tk.Tk()
 app.title("Packet Sniffer")
 app.geometry("800x600")
 
-interface_label = tk.Label(app, text="Network Interface:")
-interface_label.pack(pady=5)
+# Create a frame for the controls
+control_frame = tk.Frame(app)
+control_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nw")
 
-interface_combo = ttk.Combobox(app)
+interface_label = tk.Label(control_frame, text="Network Interface:")
+interface_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+interface_combo = ttk.Combobox(control_frame)
 interface_combo['values'] = get_if_list()
-interface_combo.pack(pady=5)
+interface_combo.grid(row=0, column=1, padx=5, pady=5)
 
-filter_label = tk.Label(app, text="Capture Filter:")
-filter_label.pack(pady=5)
+filter_label = tk.Label(control_frame, text="Capture Filter:")
+filter_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
 
-filter_entry = tk.Entry(app)
-filter_entry.pack(pady=5)
+filter_entry = tk.Entry(control_frame)
+filter_entry.grid(row=1, column=1, padx=5, pady=5)
 
-start_button = tk.Button(app, text="Start Sniffing", command=start_sniffing)
-start_button.pack(pady=5)
+start_button = tk.Button(control_frame, text="Start Sniffing", command=start_sniffing)
+start_button.grid(row=2, column=0, padx=5, pady=5)
 
-stop_button = tk.Button(app, text="Stop Sniffing", command=stop_sniffing)
-stop_button.pack(pady=5)
+stop_button = tk.Button(control_frame, text="Stop Sniffing", command=stop_sniffing)
+stop_button.grid(row=2, column=1, padx=5, pady=5)
 
-plot_button = tk.Button(app, text="Plot Traffic Distribution", command=plot_traffic_distribution)
-plot_button.pack(pady=5)
+ip_button = tk.Button(control_frame, text="Get IP Address", command=get_local_ip)
+ip_button.grid(row=2, column=2, padx=5, pady=5)
 
+plot_button = tk.Button(control_frame, text="Plot Traffic Distribution", command=plot_traffic_distribution)
+plot_button.grid(row=2, column=3, padx=5, pady=5)
+
+clear_button = tk.Button(control_frame, text="Clear Log", command=clear_log)
+clear_button.grid(row=2, column=4, padx=5, pady=5)
+
+ip_label = tk.Label(control_frame, text="Your IP Address: ")
+ip_label.grid(row=3, column=0, columnspan=5, padx=5, pady=5)
+
+# Create a text area for logging
 text_area = scrolledtext.ScrolledText(app, state='disabled', width=100, height=30)
-text_area.pack(pady=10)
+text_area.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
+# Create a label for traffic statistics
 stats_label = tk.Label(app, text="Total: 0, TCP: 0, UDP: 0, ICMP: 0, HTTP: 0")
-stats_label.pack(pady=5)
+stats_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+
+# Configure the grid to expand the text area
+app.grid_rowconfigure(1, weight=1)
+app.grid_columnconfigure(0, weight=1)
 
 sniffing_threads = []
 
