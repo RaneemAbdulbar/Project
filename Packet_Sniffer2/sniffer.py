@@ -30,7 +30,7 @@ def setup_gui():
 # Packet Capture and Logging
 def packet_callback(packet):
     log_area.insert(tk.END, str(packet) + '\n')
-    log_area.see(tk.END)  # Auto-scroll to the end
+    log_area.see(tk.END)  
 
 def start_sniffing():
     sniff(prn=packet_callback, stop_filter=lambda x: not running, store=0)
