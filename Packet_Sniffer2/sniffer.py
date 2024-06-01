@@ -9,7 +9,45 @@ import pyshark
 import queue
 import logging
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import socket
+
+#GUI Setup
+def setup_gui():
+    root = tk.Tk()
+    root.title("Packet Sniffer")
+
+    start_button = tk.Button(root, text="Start Sniffing", command=start_sniffing)
+    stop_button = tk.Button(root, text="Stop Sniffing", command=stop_sniffing)
+    log_area = scrolledtext.ScrolledText(root, wrap=tk.WORD)
+
+    start_button.pack()
+    stop_button.pack()
+    log_area.pack()
+
+    return root, log_area
+
+# Packet Capture and Logging
+def packet_callback(packet):
+    log_area.insert(tk.END, str(packet) + '\n')
+    log_area.see(tk.END)  # Auto-scroll to the end
+
+def start_sniffing():
+    sniff(prn=packet_callback, stop_filter=lambda x: not running, store=0)
+
+def stop_sniffing():
+    global running
+    running = False
+
+# Visualization with Matplotlib
+def plot_data():
+    fig, ax = plt.subplots()
+    ax.plot([0, 1, 2, 3], [0, 1, 4, 9])  # Example data
+
+    canvas = FigureCanvasTkAgg(fig, master=root)
+    canvas.get_tk_widget().pack()
+    canvas.draw()
+
 
 # Global variables to control the sniffing threads and stopping events
 running = False
