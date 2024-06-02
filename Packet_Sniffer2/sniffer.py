@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import socket
 
-#GUI Setup if it is not necessaryyou can delete it
+#GUI Setup 
 def setup_gui():
     root = tk.Tk()
     root.title("Packet Sniffer")
